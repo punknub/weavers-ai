@@ -1,0 +1,109 @@
+// Weavers AI - MVP Prototype
+// A simple React chat interface using OpenAI's API
+
+import React, { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+export default function WeaversChat() {
+  const [messages, setMessages] = useState([
+    { role: "system", content: "You are Weavers, a gentle and wise guide rooted in creativity, culture, and healing. Help users find clarity, inspiration, or sustainable actions." }
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function sendMessage() {
+    if (!input.trim()) return;
+    const userMessage = { role: "user", content: input };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/weavers-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages })
+      });
+      const data = await response.json();
+      setMessages([...newMessages, data.reply]);
+    } catch (err) {
+      console.error("Error fetching AI reply:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="max-w-xl mx-auto p-4 space-y-4">
+      <h1 className="text-2xl font-bold text-center">Weavers AI</h1>
+      <Card className="h-96 overflow-y-auto p-2 bg-white/80 shadow-inner rounded-2xl">
+        <CardContent className="space-y-2 text-sm">
+          {messages.filter(m => m.role !== "system").map((m, i) => (
+            <div
+              key={i}
+              className={
+                m.role === "user"
+                  ? "text-right text-blue-700"
+                  : "text-left text-green-700"
+              }
+            >
+              <p>{m.content}</p>
+            </div>
+          ))}
+          {loading && <p className="italic text-gray-500">Weavers is thinking...</p>}
+        </CardContent>
+      </Card>
+      <div className="flex space-x-2">
+        <Input
+          placeholder="Ask for guidance, healing, or inspiration..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+        />
+        <Button onClick={sendMessage} disabled={loading}>
+          Send
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Backend API route (/api/weavers-chat.js or .ts)
+// Place this file in your /pages/api folder (Next.js)
+
+/**
+ * @file /pages/api/weavers-chat.js
+ */
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { messages } = req.body;
+
+  try {
+    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4",
+        messages: messages,
+        temperature: 0.8
+      })
+    });
+
+    const data = await completion.json();
+    const reply = data.choices?.[0]?.message;
+    res.status(200).json({ reply });
+  } catch (error) {
+    console.error("OpenAI API error:", error);
+    res.status(500).json({ error: "Failed to generate response" });
+  }
+}
